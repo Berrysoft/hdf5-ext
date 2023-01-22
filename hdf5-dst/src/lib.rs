@@ -1,3 +1,11 @@
+//! DST extension APIs for [`hdf5`].
+
+#![feature(ptr_metadata)]
+#![warn(missing_docs)]
+
+mod container_ext;
+pub use container_ext::ContainerExt;
+
 use hdf5::{types::TypeDescriptor, H5Type};
 
 #[doc(hidden)]
@@ -7,7 +15,9 @@ pub mod __internal {
 
 pub use hdf5_dst_derive::H5TypeUnsized;
 
+/// An extension version of [`H5Type`] for DST.
 pub trait H5TypeUnsized {
+    /// Get the [`TypeDescriptor`] of current data.
     fn type_descriptor(&self) -> TypeDescriptor;
 }
 
