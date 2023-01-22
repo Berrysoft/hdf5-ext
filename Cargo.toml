@@ -1,0 +1,5 @@
+[workspace]
+members = [
+    "hdf5-dst-derive",
+    "hdf5-dst",
+]

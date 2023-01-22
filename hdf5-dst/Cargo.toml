@@ -1,0 +1,11 @@
+[package]
+name = "hdf5-dst"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+hdf5 = "0.8"
+hdf5-dst-derive = { path = "../hdf5-dst-derive" }
+
+[dev-dependencies]
+dst-container = "0.1"
