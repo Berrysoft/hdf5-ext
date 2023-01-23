@@ -9,19 +9,31 @@ use hdf5_sys::{
     h5s::H5S_ALL,
 };
 
+/// DST extensions for [`Container`].
 pub trait ContainerExt {
+    /// Writes a 1-dimensional array view into a dataset/attribute in memory order.
+    ///
+    /// The number of elements in the view must match the number of elements in the
+    /// destination dataset/attribute. The input argument must be convertible to a
+    /// 1-dimensional array view (this includes slices).
     fn write<T: ?Sized + H5TypeUnsized>(&self, v: &FixedVec<T>) -> Result<()>;
 
+    /// Writes a scalar dataset/attribute.
     fn write_scalar<T: ?Sized + H5TypeUnsized>(&self, val: &T) -> Result<()>;
 
+    /// Reads a dataset/attribute into a 1-dimensional array.
+    ///
+    /// The dataset/attribute must be 1-dimensional.
     fn read<T: ?Sized + H5TypeUnsized>(&self, v: &mut FixedVec<T>) -> Result<()>;
 
+    /// Reads a scalar dataset/attribute.
     fn read_scalar<T: ?Sized + H5TypeUnsized + MaybeUninitProject>(
         &self,
         val: &mut T::Target,
     ) -> Result<()>;
 }
 
+/// Determine if the container is attribute.
 fn is_attr(obj: &Object) -> bool {
     obj.id_type() == H5I_ATTR
 }
