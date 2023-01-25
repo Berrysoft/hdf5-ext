@@ -7,6 +7,7 @@ edition = "2021"
 hdf5-hl-sys = { path = "../hdf5-hl-sys" }
 hdf5 = "0.8"
 hdf5-sys = "0.8"
+hdf5-dst = { path = "../hdf5-dst" }
 dst-container = "0.1"
 
 [dev-dependencies]
