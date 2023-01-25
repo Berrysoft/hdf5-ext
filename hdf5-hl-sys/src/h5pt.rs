@@ -39,7 +39,7 @@ extern "C" {
     pub fn H5PTget_dataset(table_id: hid_t) -> hid_t;
     pub fn H5PTget_type(table_id: hid_t) -> hid_t;
 
-    pub fn H5PTget_num_packets(table_id: hid_t, nrecords: *mut c_size_t) -> herr_t;
+    pub fn H5PTget_num_packets(table_id: hid_t, nrecords: *mut hsize_t) -> herr_t;
     pub fn H5PTis_valid(table_id: hid_t) -> herr_t;
     pub fn H5PTis_varlen(table_id: hid_t) -> herr_t;
 

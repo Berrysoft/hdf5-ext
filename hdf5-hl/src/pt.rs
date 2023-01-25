@@ -84,14 +84,14 @@ impl PacketTable {
     }
 
     /// Push one element into the packet table.
-    pub fn push<T: ?Sized>(&self, val: &T) -> Result<()> {
+    pub fn push<T: ?Sized>(&mut self, val: &T) -> Result<()> {
         let (ptr, _) = (val as *const T).to_raw_parts();
         h5try!(H5PTappend(self.id(), 1, ptr as *const _));
         Ok(())
     }
 
     /// Append a slice into the packet table.
-    pub fn append<T>(&self, slice: &[T]) -> Result<()> {
+    pub fn append<T>(&mut self, slice: &[T]) -> Result<()> {
         h5try!(H5PTappend(
             self.id(),
             slice.len(),
@@ -101,7 +101,7 @@ impl PacketTable {
     }
 
     /// Append an unsized vector into the packet table.
-    pub fn append_unsized<T: ?Sized>(&self, vec: &FixedVec<T>) -> Result<()> {
+    pub fn append_unsized<T: ?Sized>(&mut self, vec: &FixedVec<T>) -> Result<()> {
         let (ptr, _) = vec.as_ptr().to_raw_parts();
         h5try!(H5PTappend(self.id(), vec.len(), ptr as *const _));
         Ok(())
@@ -134,7 +134,7 @@ impl PacketTable {
     }
 
     /// Get the number of packets.
-    pub fn num_packets(&self) -> Result<usize> {
+    pub fn num_packets(&self) -> Result<u64> {
         let mut len = 0;
         h5try!(H5PTget_num_packets(self.id(), &mut len));
         Ok(len)
@@ -233,6 +233,31 @@ impl PacketTable {
         self.read_unsized_impl(len, buffer, |ptr| {
             h5try!(H5PTget_next(self.id(), len, ptr as *mut _));
             Ok(())
+        })
+    }
+
+    /// Create an iterator to read the packets one by one.
+    /// It doesn't influence the index of the packet table.
+    #[allow(clippy::needless_lifetimes)]
+    pub fn iter<'a, T>(&'a self) -> impl Iterator<Item = Result<T>> + 'a {
+        let mut index = 0u64;
+        std::iter::from_fn::<Result<T>, _>(move || {
+            let mut read_one = || {
+                if index < self.num_packets()? {
+                    let mut val = MaybeUninit::uninit();
+                    h5try!(H5PTread_packets(
+                        self.id(),
+                        index,
+                        1,
+                        val.as_mut_ptr() as *mut _
+                    ));
+                    index += 1;
+                    Ok(Some(unsafe { val.assume_init() }))
+                } else {
+                    Ok(None)
+                }
+            };
+            read_one().transpose()
         })
     }
 }
@@ -366,14 +391,14 @@ mod test {
     use tempfile::NamedTempFile;
 
     #[test]
-    fn append() {
+    fn basic() {
         let file = NamedTempFile::new().unwrap();
 
         let vec = vec![1, 1, 4, 5, 1, 4];
 
         let data = hdf5::File::create(file.path()).unwrap();
         {
-            let table = PacketTable::builder(&data)
+            let mut table = PacketTable::builder(&data)
                 .chunk(16)
                 .dtype::<i32>()
                 .create("data")
@@ -381,15 +406,29 @@ mod test {
             table.append(&vec).unwrap();
         }
         {
-            let table = PacketTable::open(&data, "data").unwrap();
-            let dataset = table.dataset().unwrap();
-            let read_data = dataset.read_1d::<i32>().unwrap();
-            assert_eq!(read_data.as_slice().unwrap(), &[1, 1, 4, 5, 1, 4]);
-        }
-        {
-            let table = PacketTable::open(&data, "data").unwrap();
-            let read_data = table.read::<i32>(0, 6).unwrap();
-            assert_eq!(read_data.as_slice(), &[1, 1, 4, 5, 1, 4]);
+            let mut table = PacketTable::open(&data, "data").unwrap();
+            {
+                let dataset = table.dataset().unwrap();
+                let read_data = dataset.read_1d::<i32>().unwrap();
+                assert_eq!(read_data.as_slice().unwrap(), &[1, 1, 4, 5, 1, 4]);
+            }
+            {
+                let read_data = table.read::<i32>(0, 6).unwrap();
+                assert_eq!(read_data, &[1, 1, 4, 5, 1, 4]);
+            }
+            {
+                let read_data = table
+                    .iter::<i32>()
+                    .map(|item| item.unwrap())
+                    .collect::<Vec<_>>();
+                assert_eq!(read_data, &[1, 1, 4, 5, 1, 4]);
+            }
+            {
+                table.reset_index().unwrap();
+                assert_eq!(table.index().unwrap(), 0);
+                assert_eq!(table.read_next::<i32>(6).unwrap(), &[1, 1, 4, 5, 1, 4]);
+                assert_eq!(table.index().unwrap(), 6);
+            }
         }
     }
 }
