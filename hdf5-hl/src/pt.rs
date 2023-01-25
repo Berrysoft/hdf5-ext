@@ -1,7 +1,7 @@
 use dst_container::*;
 use hdf5::{
     h5call, h5lock, h5try, plist::DatasetCreate, types::TypeDescriptor, Dataset, Datatype,
-    Dimension, H5Type, Location, Result,
+    Dimension, Group, H5Type, Result,
 };
 use hdf5_dst::H5TypeUnsized;
 use hdf5_hl_sys::h5pt::{
@@ -17,6 +17,8 @@ use hdf5_sys::{
 };
 use std::{ffi::CString, fmt::Debug, mem::transmute, ptr::Pointee};
 
+/// The HDF5 Packet Table is designed to allow records to be appended to and read from a table.
+/// Packet Table datasets are chunked, allowing them to grow as needed.
 #[repr(transparent)]
 pub struct PacketTable(hid_t);
 
@@ -29,10 +31,12 @@ impl Debug for PacketTable {
 
 // Object impls.
 impl PacketTable {
+    #[doc(hidden)]
     pub const fn id(&self) -> hid_t {
         self.0
     }
 
+    #[doc(hidden)]
     pub fn id_type(&self) -> H5I_type_t {
         if self.id() <= 0 {
             H5I_BADID
@@ -50,22 +54,26 @@ impl PacketTable {
 }
 
 impl PacketTable {
-    pub fn builder(loc: &Location) -> PacketTableBuilder {
+    /// Create a packet table builder from a specified location.
+    pub fn builder(loc: &Group) -> PacketTableBuilder {
         PacketTableBuilder::new(loc)
     }
 
-    pub fn open(loc: &Location, dset_name: impl AsRef<str>) -> Result<Self> {
+    /// Open an existing packet table.
+    pub fn open(loc: &Group, dset_name: impl AsRef<str>) -> Result<Self> {
         let dset_name = CString::new(dset_name.as_ref()).map_err(|e| e.to_string())?;
         let table = h5try!(H5PTopen(loc.id(), dset_name.as_ptr()));
         Ok(Self::from_id(table))
     }
 
+    /// Push one element into the packet table.
     pub fn push<T: ?Sized>(&self, val: &T) -> Result<()> {
         let (ptr, _) = (val as *const T).to_raw_parts();
         h5try!(H5PTappend(self.id(), 1, ptr as *const _));
         Ok(())
     }
 
+    /// Append a slice into the packet table.
     pub fn append<T>(&self, slice: &[T]) -> Result<()> {
         h5try!(H5PTappend(
             self.id(),
@@ -75,18 +83,21 @@ impl PacketTable {
         Ok(())
     }
 
+    /// Append an unsized vector into the packet table.
     pub fn append_unsized<T: ?Sized>(&self, vec: &FixedVec<T>) -> Result<()> {
         let (ptr, _) = vec.as_ptr().to_raw_parts();
         h5try!(H5PTappend(self.id(), vec.len(), ptr as *const _));
         Ok(())
     }
 
+    /// Get the inner [`Dataset`] from the packet table.
     pub fn dataset(&self) -> Result<Dataset> {
         let dset = h5try!(H5PTget_dataset(self.id()));
         h5lock!(H5Iinc_ref(dset));
         Ok(unsafe { transmute(dset) })
     }
 
+    /// Get the inner [`Datatype`] from the packet table.
     pub fn dtype(&self) -> Result<Datatype> {
         let ty = h5try!(H5PTget_type(self.id()));
         h5lock!(H5Iinc_ref(ty));
@@ -100,14 +111,17 @@ impl Drop for PacketTable {
     }
 }
 
+/// The incomplete builder of [`PacketTable`].
+/// You need at least set the chunk or the plist with valid chunk.
+/// If both are set, the chunk value will override the plist chunk value.
 pub struct PacketTableBuilder {
-    loc: Location,
+    loc: Group,
     chunk: Option<usize>,
     plist: Option<DatasetCreate>,
 }
 
 impl PacketTableBuilder {
-    pub fn new(loc: &Location) -> Self {
+    pub(crate) fn new(loc: &Group) -> Self {
         Self {
             loc: loc.clone(),
             chunk: None,
@@ -115,16 +129,19 @@ impl PacketTableBuilder {
         }
     }
 
+    /// Set the [`DatasetCreate`] property list.
     pub fn plist(mut self, plist: DatasetCreate) -> Self {
         self.plist = Some(plist);
         self
     }
 
+    /// Set the chunk size of the packet table.
     pub fn chunk(mut self, chunk: impl Dimension) -> Self {
         self.chunk = Some(chunk.size());
         self
     }
 
+    /// Set the [`Datatype`] of the packet table.
     pub fn dtype<T: H5Type>(self) -> PacketTableBuilderTyped {
         PacketTableBuilderTyped {
             builder: self,
@@ -132,6 +149,7 @@ impl PacketTableBuilder {
         }
     }
 
+    /// Set the [`Datatype`] of the packet table with provided [`TypeDescriptor`].
     pub fn dtype_as(self, dtype: TypeDescriptor) -> PacketTableBuilderTyped {
         PacketTableBuilderTyped {
             builder: self,
@@ -139,6 +157,7 @@ impl PacketTableBuilder {
         }
     }
 
+    /// Set the [`Datatype`] of the packet table with raw pointee metadata.
     pub fn dtype_unsized<T: ?Sized + H5TypeUnsized>(
         self,
         metadata: <T as Pointee>::Metadata,
@@ -149,6 +168,7 @@ impl PacketTableBuilder {
         }
     }
 
+    /// Set the [`Datatype`] of the packet table with a sample value reference.
     pub fn dtype_unsized_like<T: ?Sized + H5TypeUnsized>(self, val: &T) -> PacketTableBuilderTyped {
         let dtype = val.type_descriptor();
         PacketTableBuilderTyped {
@@ -182,22 +202,26 @@ impl PacketTableBuilder {
     }
 }
 
+/// A complete builder of [`PacketTable`].
 pub struct PacketTableBuilderTyped {
     builder: PacketTableBuilder,
     dtype: TypeDescriptor,
 }
 
 impl PacketTableBuilderTyped {
+    /// Set the [`DatasetCreate`] property list.
     pub fn plist(mut self, plist: DatasetCreate) -> Self {
         self.builder = self.builder.plist(plist);
         self
     }
 
+    /// Set the chunk size of the packet table.
     pub fn chunk(mut self, chunk: impl Dimension) -> Self {
         self.builder = self.builder.chunk(chunk);
         self
     }
 
+    /// Create the [`PacketTable`].
     pub fn create(self, table_name: impl AsRef<str>) -> Result<PacketTable> {
         let dtype = Datatype::from_descriptor(&self.dtype)?;
         self.builder.create(table_name.as_ref(), &dtype)
