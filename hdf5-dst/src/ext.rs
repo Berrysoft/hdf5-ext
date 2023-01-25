@@ -3,7 +3,7 @@ use std::ptr::Pointee;
 use crate::H5TypeUnsized;
 use dst_container::*;
 use hdf5::{
-    h5check, sync::sync, types::TypeDescriptor, AttributeBuilder, AttributeBuilderEmpty, Container,
+    h5try, types::TypeDescriptor, AttributeBuilder, AttributeBuilderEmpty, Container,
     DatasetBuilder, DatasetBuilderEmpty, Datatype, Object, Result,
 };
 use hdf5_sys::{
@@ -51,11 +51,16 @@ fn write_container(c: &Container, mem_dtype: TypeDescriptor, buf: *const ()) -> 
     let obj_id = c.id();
     let tp_id = mem_dtype.id();
     if is_attr(c) {
-        sync(|| h5check(unsafe { H5Awrite(obj_id, tp_id, buf.cast()) }))?;
+        h5try!(H5Awrite(obj_id, tp_id, buf.cast()));
     } else {
-        sync(|| {
-            h5check(unsafe { H5Dwrite(obj_id, tp_id, H5S_ALL, H5S_ALL, H5P_DEFAULT, buf.cast()) })
-        })?;
+        h5try!(H5Dwrite(
+            obj_id,
+            tp_id,
+            H5S_ALL,
+            H5S_ALL,
+            H5P_DEFAULT,
+            buf.cast()
+        ));
     }
     Ok(())
 }
@@ -68,11 +73,16 @@ fn read_container(c: &Container, mem_dtype: TypeDescriptor, buf: *mut ()) -> Res
     let obj_id = c.id();
     let tp_id = mem_dtype.id();
     if is_attr(c) {
-        sync(|| h5check(unsafe { H5Aread(obj_id, tp_id, buf.cast()) }))?;
+        h5try!(H5Aread(obj_id, tp_id, buf.cast()));
     } else {
-        sync(|| {
-            h5check(unsafe { H5Dread(obj_id, tp_id, H5S_ALL, H5S_ALL, H5P_DEFAULT, buf.cast()) })
-        })?;
+        h5try!(H5Dread(
+            obj_id,
+            tp_id,
+            H5S_ALL,
+            H5S_ALL,
+            H5P_DEFAULT,
+            buf.cast()
+        ));
     }
     Ok(())
 }
