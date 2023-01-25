@@ -1,0 +1,7 @@
+[package]
+name = "hdf5-hl-sys"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+hdf5-sys = "0.8"
