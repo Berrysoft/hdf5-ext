@@ -27,6 +27,7 @@ extern "C" {
 
     pub fn H5PTcreate_index(table_id: hid_t) -> herr_t;
     pub fn H5PTset_index(table_id: hid_t, pt_index: hsize_t) -> herr_t;
+    pub fn H5PTget_index(table_id: hid_t, pt_index: *mut hsize_t) -> herr_t;
 
     pub fn H5PTread_packets(
         table_id: hid_t,

@@ -5,7 +5,9 @@ use hdf5::{
 };
 use hdf5_dst::H5TypeUnsized;
 use hdf5_hl_sys::h5pt::{
-    H5PTappend, H5PTclose, H5PTcreate, H5PTget_dataset, H5PTget_type, H5PTopen,
+    H5PTappend, H5PTclose, H5PTcreate, H5PTcreate_index, H5PTget_dataset, H5PTget_index,
+    H5PTget_next, H5PTget_num_packets, H5PTget_type, H5PTis_valid, H5PTis_varlen, H5PTopen,
+    H5PTread_packets, H5PTset_index,
 };
 use hdf5_sys::{
     h5i::{
@@ -15,7 +17,22 @@ use hdf5_sys::{
     },
     h5p::H5P_DEFAULT,
 };
-use std::{ffi::CString, fmt::Debug, mem::transmute, ptr::Pointee};
+use std::{
+    ffi::CString,
+    fmt::Debug,
+    mem::{transmute, MaybeUninit},
+    ptr::Pointee,
+};
+
+/// The packet type of a packet table.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(i32)]
+pub enum PacketTableType {
+    /// Fixed length packet.
+    Fixed = 0,
+    /// Variable length packet.
+    VarLen = 1,
+}
 
 /// The HDF5 Packet Table is designed to allow records to be appended to and read from a table.
 /// Packet Table datasets are chunked, allowing them to grow as needed.
@@ -97,11 +114,126 @@ impl PacketTable {
         Ok(unsafe { transmute(dset) })
     }
 
+    /// Determine if the current packet table is valid.
+    pub fn validate(&self) -> Result<()> {
+        h5try!(H5PTis_valid(self.id()));
+        Ok(())
+    }
+
+    /// Determines whether a packet table contains variable-length or fixed-length packets.
+    pub fn table_type(&self) -> Result<PacketTableType> {
+        let ty = h5try!(H5PTis_varlen(self.id()));
+        Ok(unsafe { transmute(ty) })
+    }
+
     /// Get the inner [`Datatype`] from the packet table.
     pub fn dtype(&self) -> Result<Datatype> {
         let ty = h5try!(H5PTget_type(self.id()));
         h5lock!(H5Iinc_ref(ty));
         Ok(unsafe { transmute(ty) })
+    }
+
+    /// Get the number of packets.
+    pub fn num_packets(&self) -> Result<usize> {
+        let mut len = 0;
+        h5try!(H5PTget_num_packets(self.id(), &mut len));
+        Ok(len)
+    }
+
+    /// Reset the current index to 0.
+    pub fn reset_index(&mut self) -> Result<()> {
+        h5try!(H5PTcreate_index(self.id()));
+        Ok(())
+    }
+
+    /// Set the current index.
+    pub fn set_index(&mut self, index: u64) -> Result<()> {
+        h5try!(H5PTset_index(self.id(), index));
+        Ok(())
+    }
+
+    /// Get the current index.
+    pub fn index(&self) -> Result<u64> {
+        let mut index = 0;
+        h5try!(H5PTget_index(self.id(), &mut index));
+        Ok(index)
+    }
+
+    fn read_impl<T>(
+        &self,
+        len: usize,
+        f: impl FnOnce(&mut [MaybeUninit<T>]) -> Result<()>,
+    ) -> Result<Vec<T>> {
+        let mut vec = Vec::with_capacity(len);
+        let uninit = vec.spare_capacity_mut();
+        f(uninit)?;
+        // SAFETY: read succeeded.
+        unsafe {
+            vec.set_len(len);
+        }
+        Ok(vec)
+    }
+
+    /// Read from a specified packet index and take some data.
+    pub fn read<T>(&self, start: u64, len: usize) -> Result<Vec<T>> {
+        self.read_impl(len, |uninit| {
+            h5try!(H5PTread_packets(
+                self.id(),
+                start,
+                len,
+                uninit.as_mut_ptr() as *mut _
+            ));
+            Ok(())
+        })
+    }
+
+    /// Read from current index and update the index if the operation succeeds.
+    pub fn read_next<T>(&mut self, len: usize) -> Result<Vec<T>> {
+        self.read_impl(len, |uninit| {
+            h5try!(H5PTget_next(self.id(), len, uninit.as_mut_ptr() as *mut _));
+            Ok(())
+        })
+    }
+
+    fn read_unsized_impl<T: ?Sized>(
+        &self,
+        len: usize,
+        buffer: &mut FixedVec<T>,
+        f: impl FnOnce(*mut ()) -> Result<()>,
+    ) -> Result<()> {
+        let old_len = buffer.len();
+        buffer.reserve(len);
+        let (ptr, _) = unsafe { buffer.get_unchecked_mut(old_len) as *mut T }.to_raw_parts();
+        f(ptr)?;
+        unsafe {
+            buffer.set_len(old_len + len);
+        }
+        Ok(())
+    }
+
+    /// Read from a specified packet index and take some data.
+    pub fn read_unsized<T: ?Sized>(
+        &self,
+        start: u64,
+        len: usize,
+        buffer: &mut FixedVec<T>,
+    ) -> Result<()> {
+        self.read_unsized_impl(len, buffer, |ptr| {
+            h5try!(H5PTread_packets(self.id(), start, len, ptr as *mut _));
+            Ok(())
+        })
+    }
+
+    /// Read from current index and update the index if the operation succeeds.
+    pub fn read_next_unsized<T: ?Sized>(
+        &mut self,
+        len: usize,
+        buffer: &mut FixedVec<T>,
+    ) -> Result<()> {
+        self.read_unsized_impl(len, buffer, |ptr| {
+            h5try!(H5PTget_next(self.id(), len, ptr as *mut _));
+            Ok(())
+        })
     }
 }
 
@@ -253,6 +385,11 @@ mod test {
             let dataset = table.dataset().unwrap();
             let read_data = dataset.read_1d::<i32>().unwrap();
             assert_eq!(read_data.as_slice().unwrap(), &[1, 1, 4, 5, 1, 4]);
+        }
+        {
+            let table = PacketTable::open(&data, "data").unwrap();
+            let read_data = table.read::<i32>(0, 6).unwrap();
+            assert_eq!(read_data.as_slice(), &[1, 1, 4, 5, 1, 4]);
         }
     }
 }

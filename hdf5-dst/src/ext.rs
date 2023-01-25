@@ -104,14 +104,15 @@ impl ContainerExt for Container {
 
     fn read_unsized<T: ?Sized + H5TypeUnsized>(&self, v: &mut FixedVec<T>) -> Result<()> {
         debug_assert_eq!(self.ndim(), 1);
+        let old_len = v.len();
         let new_len = self.shape()[0];
         v.reserve(new_len);
-        let (ptr, _) = v.as_mut_ptr().to_raw_parts();
+        let (ptr, _) = unsafe { v.get_unchecked_mut(old_len) as *mut T }.to_raw_parts();
         // SAFETY: only the metadata of the reference is used.
         read_container(self, unsafe { v.get_unchecked(0) }.type_descriptor(), ptr)?;
         // SAFETY: read successfully.
         unsafe {
-            v.set_len(v.len() + new_len);
+            v.set_len(old_len + new_len);
         }
         Ok(())
     }
