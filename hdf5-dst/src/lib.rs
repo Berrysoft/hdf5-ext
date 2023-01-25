@@ -1,10 +1,11 @@
 //! DST extension APIs for [`hdf5`].
 
 #![feature(ptr_metadata)]
+#![cfg_attr(test, feature(maybe_uninit_write_slice))]
 #![warn(missing_docs)]
 
-mod container_ext;
-pub use container_ext::ContainerExt;
+mod ext;
+pub use ext::{ContainerExt, DatasetBuilderExt};
 
 use hdf5::{types::TypeDescriptor, H5Type};
 
