@@ -3,8 +3,8 @@ use std::ptr::Pointee;
 use crate::H5TypeUnsized;
 use dst_container::*;
 use hdf5::{
-    h5try, types::TypeDescriptor, AttributeBuilder, AttributeBuilderEmpty, Container,
-    DatasetBuilder, DatasetBuilderEmpty, Datatype, Object, Result,
+    h5try, types::TypeDescriptor, Attribute, AttributeBuilder, AttributeBuilderEmpty, Container,
+    Dataset, DatasetBuilder, DatasetBuilderEmpty, Datatype, Extents, Object, Result,
 };
 use hdf5_sys::{
     h5a::{H5Aread, H5Awrite},
@@ -133,6 +133,9 @@ pub trait ContainerBuilderExt: Sized {
     /// The empty builder type.
     type EmptyBuilder: Sized;
 
+    /// The data builder type.
+    type DataUnsizedBuilder<'a, T: ?Sized + 'a>: Sized;
+
     /// DST version of [`empty`].
     /// Need pointee metadata passed in.
     fn empty_unsized<T: ?Sized + H5TypeUnsized>(
@@ -145,6 +148,12 @@ pub trait ContainerBuilderExt: Sized {
         let (_, metadata) = (val as *const T).to_raw_parts();
         self.empty_unsized::<T>(metadata)
     }
+
+    /// Create a builder that fills data after being created.
+    fn with_data_unsized<'a, T: ?Sized + H5TypeUnsized + 'a>(
+        self,
+        data: impl Into<UnsizedData<'a, T>>,
+    ) -> Self::DataUnsizedBuilder<'a, T>;
 }
 
 fn type_from_null<T: ?Sized + H5TypeUnsized>(metadata: <T as Pointee>::Metadata) -> TypeDescriptor {
@@ -155,8 +164,67 @@ fn type_from_null<T: ?Sized + H5TypeUnsized>(metadata: <T as Pointee>::Metadata)
     }
 }
 
+/// DST data.
+/// Either a scalar or a vector.
+pub enum UnsizedData<'a, T: ?Sized> {
+    /// A scalar reference.
+    Scalar(&'a T),
+    /// A vector reference.
+    Vec(&'a FixedVec<T>),
+}
+
+impl<T: ?Sized> UnsizedData<'_, T> {
+    pub(crate) fn shape(&self) -> Extents {
+        match self {
+            Self::Scalar(_) => ().into(),
+            Self::Vec(vec) => vec.len().into(),
+        }
+    }
+
+    pub(crate) fn metadata(&self) -> <T as Pointee>::Metadata {
+        match self {
+            Self::Scalar(data) => *data as *const T,
+            Self::Vec(vec) => vec.as_ptr(),
+        }
+        .to_raw_parts()
+        .1
+    }
+}
+
+impl<'a, T: ?Sized> From<&'a T> for UnsizedData<'a, T> {
+    fn from(value: &'a T) -> Self {
+        Self::Scalar(value)
+    }
+}
+
+impl<'a, T: ?Sized> From<&'a FixedVec<T>> for UnsizedData<'a, T> {
+    fn from(value: &'a FixedVec<T>) -> Self {
+        Self::Vec(value)
+    }
+}
+
+/// [`Dataset`] builder with unsized data.
+pub struct DatasetBuilderDataUnsized<'a, T: ?Sized> {
+    data: UnsizedData<'a, T>,
+    builder: DatasetBuilderEmpty,
+}
+
+impl<'a, T: ?Sized + H5TypeUnsized> DatasetBuilderDataUnsized<'a, T> {
+    /// Create the [`Dataset`] and fill the value.
+    pub fn create<'n>(self, name: impl Into<Option<&'n str>>) -> Result<Dataset> {
+        let dataset = self.builder.shape(self.data.shape()).create(name.into())?;
+        match self.data {
+            UnsizedData::Scalar(data) => dataset.write_scalar_unsized(data),
+            UnsizedData::Vec(data) => dataset.write_unsized(data),
+        }?;
+        Ok(dataset)
+    }
+}
+
 impl ContainerBuilderExt for DatasetBuilder {
     type EmptyBuilder = DatasetBuilderEmpty;
+
+    type DataUnsizedBuilder<'a, T: ?Sized + 'a> = DatasetBuilderDataUnsized<'a, T>;
 
     fn empty_unsized<T: ?Sized + H5TypeUnsized>(
         self,
@@ -165,10 +233,45 @@ impl ContainerBuilderExt for DatasetBuilder {
         let ty = type_from_null::<T>(metadata);
         self.empty_as(&ty)
     }
+
+    fn with_data_unsized<'a, T: ?Sized + H5TypeUnsized + 'a>(
+        self,
+        data: impl Into<UnsizedData<'a, T>>,
+    ) -> Self::DataUnsizedBuilder<'a, T> {
+        let data = data.into();
+        let metadata = data.metadata();
+        DatasetBuilderDataUnsized {
+            data,
+            builder: self.empty_unsized::<T>(metadata),
+        }
+    }
+}
+
+/// [`Attribute`] builder with unsized data.
+pub struct AttributeBuilderDataUnsized<'a, T: ?Sized> {
+    data: UnsizedData<'a, T>,
+    builder: AttributeBuilderEmpty,
+}
+
+impl<'a, T: ?Sized + H5TypeUnsized> AttributeBuilderDataUnsized<'a, T> {
+    /// Create the [`Attribute`] and fill the value.
+    pub fn create(self, name: impl AsRef<str>) -> Result<Attribute> {
+        let attr = self
+            .builder
+            .shape(self.data.shape())
+            .create(name.as_ref())?;
+        match self.data {
+            UnsizedData::Scalar(data) => attr.write_scalar_unsized(data),
+            UnsizedData::Vec(data) => attr.write_unsized(data),
+        }?;
+        Ok(attr)
+    }
 }
 
 impl ContainerBuilderExt for AttributeBuilder {
     type EmptyBuilder = AttributeBuilderEmpty;
+
+    type DataUnsizedBuilder<'a, T: ?Sized + 'a> = AttributeBuilderDataUnsized<'a, T>;
 
     fn empty_unsized<T: ?Sized + H5TypeUnsized>(
         self,
@@ -176,6 +279,18 @@ impl ContainerBuilderExt for AttributeBuilder {
     ) -> Self::EmptyBuilder {
         let ty = type_from_null::<T>(metadata);
         self.empty_as(&ty)
+    }
+
+    fn with_data_unsized<'a, T: ?Sized + H5TypeUnsized + 'a>(
+        self,
+        data: impl Into<UnsizedData<'a, T>>,
+    ) -> Self::DataUnsizedBuilder<'a, T> {
+        let data = data.into();
+        let metadata = data.metadata();
+        AttributeBuilderDataUnsized {
+            data,
+            builder: self.empty_unsized::<T>(metadata),
+        }
     }
 }
 
@@ -210,12 +325,10 @@ mod test {
         {
             let dataset = data
                 .new_dataset_builder()
-                .empty_like_unsized(&vec[0])
-                .shape(vec.len())
+                .with_data_unsized::<Data>(&vec)
                 .create("data")
                 .unwrap();
             assert_eq!(&dataset.shape(), &[vec.len()]);
-            dataset.write_unsized(&vec).unwrap();
         }
         {
             let mut read_vec: FixedVec<Data> = FixedVec::new(6);
@@ -242,12 +355,11 @@ mod test {
         let dataset = data.new_dataset::<i32>().create("data").unwrap();
         dataset.write_scalar(&114514).unwrap();
         {
-            let attr = dataset
+            dataset
                 .new_attr_builder()
-                .empty_like_unsized(unsized_data.as_ref())
+                .with_data_unsized(unsized_data.as_ref())
                 .create("attr")
                 .unwrap();
-            attr.write_scalar_unsized(unsized_data.as_ref()).unwrap();
         }
         {
             let mut read_data: Box<<Data as MaybeUninitProject>::Target> =

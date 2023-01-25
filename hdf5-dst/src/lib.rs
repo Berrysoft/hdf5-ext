@@ -5,7 +5,7 @@
 #![warn(missing_docs)]
 
 mod ext;
-pub use ext::{ContainerBuilderExt, ContainerExt};
+pub use ext::*;
 
 use hdf5::{types::TypeDescriptor, H5Type};
 
