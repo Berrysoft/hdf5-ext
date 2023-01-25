@@ -192,7 +192,7 @@ mod test {
             })
         };
 
-        let data = hdf5::File::create("dataset.h5").unwrap();
+        let data = hdf5::File::create(file.path()).unwrap();
         {
             let dataset = data
                 .new_dataset_builder()
@@ -226,7 +226,7 @@ mod test {
             })
         };
 
-        let data = hdf5::File::create("attribute.h5").unwrap();
+        let data = hdf5::File::create(file.path()).unwrap();
         let dataset = data.new_dataset::<i32>().create("data").unwrap();
         {
             let attr = dataset
