@@ -4,4 +4,5 @@ members = [
     "hdf5-dst",
 
     "hdf5-hl-sys",
+    "hdf5-hl",
 ]
