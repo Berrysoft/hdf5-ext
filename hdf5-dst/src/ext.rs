@@ -3,8 +3,8 @@ use std::ptr::Pointee;
 use crate::H5TypeUnsized;
 use dst_container::*;
 use hdf5::{
-    h5check, types::TypeDescriptor, Container, DatasetBuilder, DatasetBuilderEmpty, Datatype,
-    Object, Result,
+    h5check, types::TypeDescriptor, AttributeBuilder, AttributeBuilderEmpty, Container,
+    DatasetBuilder, DatasetBuilderEmpty, Datatype, Object, Result,
 };
 use hdf5_sys::{
     h5a::{H5Aread, H5Awrite},
@@ -114,17 +114,20 @@ impl ContainerExt for Container {
     }
 }
 
-/// DST extensions for [`DatasetBuilder`].
-pub trait DatasetBuilderExt: Sized {
+/// DST extensions for [`DatasetBuilder`] and [`AttributeBuilder`].
+pub trait ContainerBuilderExt: Sized {
+    /// The empty builder type.
+    type EmptyBuilder: Sized;
+
     /// DST version of [`empty`].
     /// Need pointee metadata passed in.
     fn empty_unsized<T: ?Sized + H5TypeUnsized>(
         self,
         metadata: <T as Pointee>::Metadata,
-    ) -> DatasetBuilderEmpty;
+    ) -> Self::EmptyBuilder;
 
     /// Give a sample reference of DST instance, and create a dataset like it.
-    fn empty_like_unsized<T: ?Sized + H5TypeUnsized>(self, val: &T) -> DatasetBuilderEmpty {
+    fn empty_like_unsized<T: ?Sized + H5TypeUnsized>(self, val: &T) -> Self::EmptyBuilder {
         let (_, metadata) = (val as *const T).to_raw_parts();
         self.empty_unsized::<T>(metadata)
     }
@@ -138,11 +141,25 @@ fn type_from_null<T: ?Sized + H5TypeUnsized>(metadata: <T as Pointee>::Metadata)
     }
 }
 
-impl DatasetBuilderExt for DatasetBuilder {
+impl ContainerBuilderExt for DatasetBuilder {
+    type EmptyBuilder = DatasetBuilderEmpty;
+
     fn empty_unsized<T: ?Sized + H5TypeUnsized>(
         self,
         metadata: <T as Pointee>::Metadata,
-    ) -> DatasetBuilderEmpty {
+    ) -> Self::EmptyBuilder {
+        let ty = type_from_null::<T>(metadata);
+        self.empty_as(&ty)
+    }
+}
+
+impl ContainerBuilderExt for AttributeBuilder {
+    type EmptyBuilder = AttributeBuilderEmpty;
+
+    fn empty_unsized<T: ?Sized + H5TypeUnsized>(
+        self,
+        metadata: <T as Pointee>::Metadata,
+    ) -> Self::EmptyBuilder {
         let ty = type_from_null::<T>(metadata);
         self.empty_as(&ty)
     }
@@ -175,7 +192,7 @@ mod test {
             })
         };
 
-        let data = hdf5::File::create(file.path()).unwrap();
+        let data = hdf5::File::create("dataset.h5").unwrap();
         {
             let dataset = data
                 .new_dataset_builder()
@@ -187,11 +204,47 @@ mod test {
             dataset.write_unsized(&vec).unwrap();
         }
         {
-            let mut vec: FixedVec<Data> = FixedVec::new(6);
+            let mut read_vec: FixedVec<Data> = FixedVec::new(6);
             let dataset = data.dataset("data").unwrap();
-            dataset.read_unsized(&mut vec).unwrap();
-            assert_eq!(vec[0].header, 114514);
-            assert_eq!(&vec[0].slice, &[1, 1, 4, 5, 1, 4]);
+            assert_eq!(&dataset.shape(), &[vec.len()]);
+            dataset.read_unsized(&mut read_vec).unwrap();
+            assert_eq!(read_vec[0].header, 114514);
+            assert_eq!(&read_vec[0].slice, &[1, 1, 4, 5, 1, 4]);
+        }
+    }
+
+    #[test]
+    fn attribute() {
+        let file = NamedTempFile::new().unwrap();
+
+        let mut vec: FixedVec<Data> = FixedVec::new(6);
+        assert_eq!(vec.len(), 0);
+        unsafe {
+            vec.push_with(|slice| {
+                slice.header.write(114514);
+                MaybeUninit::write_slice(&mut slice.slice, &[1, 1, 4, 5, 1, 4]);
+            })
+        };
+
+        let data = hdf5::File::create("attribute.h5").unwrap();
+        let dataset = data.new_dataset::<i32>().create("data").unwrap();
+        {
+            let attr = dataset
+                .new_attr_builder()
+                .empty_like_unsized(&vec[0])
+                .shape(vec.len())
+                .create("attr")
+                .unwrap();
+            assert_eq!(&attr.shape(), &[vec.len()]);
+            attr.write_unsized(&vec).unwrap();
+        }
+        {
+            let mut read_vec: FixedVec<Data> = FixedVec::new(6);
+            let attr = dataset.attr("attr").unwrap();
+            assert_eq!(&attr.shape(), &[vec.len()]);
+            attr.read_unsized(&mut read_vec).unwrap();
+            assert_eq!(read_vec[0].header, 114514);
+            assert_eq!(&read_vec[0].slice, &[1, 1, 4, 5, 1, 4]);
         }
     }
 }
