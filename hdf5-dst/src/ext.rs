@@ -3,7 +3,7 @@ use std::ptr::Pointee;
 use crate::H5TypeUnsized;
 use dst_container::*;
 use hdf5::{
-    h5check, types::TypeDescriptor, AttributeBuilder, AttributeBuilderEmpty, Container,
+    h5check, sync::sync, types::TypeDescriptor, AttributeBuilder, AttributeBuilderEmpty, Container,
     DatasetBuilder, DatasetBuilderEmpty, Datatype, Object, Result,
 };
 use hdf5_sys::{
@@ -51,9 +51,11 @@ fn write_container(c: &Container, mem_dtype: TypeDescriptor, buf: *const ()) -> 
     let obj_id = c.id();
     let tp_id = mem_dtype.id();
     if is_attr(c) {
-        h5check(unsafe { H5Awrite(obj_id, tp_id, buf.cast()) })?;
+        sync(|| h5check(unsafe { H5Awrite(obj_id, tp_id, buf.cast()) }))?;
     } else {
-        h5check(unsafe { H5Dwrite(obj_id, tp_id, H5S_ALL, H5S_ALL, H5P_DEFAULT, buf.cast()) })?;
+        sync(|| {
+            h5check(unsafe { H5Dwrite(obj_id, tp_id, H5S_ALL, H5S_ALL, H5P_DEFAULT, buf.cast()) })
+        })?;
     }
     Ok(())
 }
@@ -66,9 +68,11 @@ fn read_container(c: &Container, mem_dtype: TypeDescriptor, buf: *mut ()) -> Res
     let obj_id = c.id();
     let tp_id = mem_dtype.id();
     if is_attr(c) {
-        h5check(unsafe { H5Aread(obj_id, tp_id, buf.cast()) })?;
+        sync(|| h5check(unsafe { H5Aread(obj_id, tp_id, buf.cast()) }))?;
     } else {
-        h5check(unsafe { H5Dread(obj_id, tp_id, H5S_ALL, H5S_ALL, H5P_DEFAULT, buf.cast()) })?;
+        sync(|| {
+            h5check(unsafe { H5Dread(obj_id, tp_id, H5S_ALL, H5S_ALL, H5P_DEFAULT, buf.cast()) })
+        })?;
     }
     Ok(())
 }
@@ -217,10 +221,8 @@ mod test {
     fn attribute() {
         let file = NamedTempFile::new().unwrap();
 
-        let mut vec: FixedVec<Data> = FixedVec::new(6);
-        assert_eq!(vec.len(), 0);
-        unsafe {
-            vec.push_with(|slice| {
+        let unsized_data: Box<Data> = unsafe {
+            Box::<Data>::new_unsized_with(6, |slice| {
                 slice.header.write(114514);
                 MaybeUninit::write_slice(&mut slice.slice, &[1, 1, 4, 5, 1, 4]);
             })
@@ -228,23 +230,24 @@ mod test {
 
         let data = hdf5::File::create(file.path()).unwrap();
         let dataset = data.new_dataset::<i32>().create("data").unwrap();
+        dataset.write_scalar(&114514).unwrap();
         {
             let attr = dataset
                 .new_attr_builder()
-                .empty_like_unsized(&vec[0])
-                .shape(vec.len())
+                .empty_like_unsized(unsized_data.as_ref())
                 .create("attr")
                 .unwrap();
-            assert_eq!(&attr.shape(), &[vec.len()]);
-            attr.write_unsized(&vec).unwrap();
+            attr.write_scalar_unsized(unsized_data.as_ref()).unwrap();
         }
         {
-            let mut read_vec: FixedVec<Data> = FixedVec::new(6);
+            let mut read_data: Box<<Data as MaybeUninitProject>::Target> =
+                Box::<Data>::new_uninit_unsized(6);
             let attr = dataset.attr("attr").unwrap();
-            assert_eq!(&attr.shape(), &[vec.len()]);
-            attr.read_unsized(&mut read_vec).unwrap();
-            assert_eq!(read_vec[0].header, 114514);
-            assert_eq!(&read_vec[0].slice, &[1, 1, 4, 5, 1, 4]);
+            attr.read_scalar_unsized::<Data>(read_data.as_mut())
+                .unwrap();
+            let read_data: Box<Data> = unsafe { read_data.assume_init() };
+            assert_eq!(read_data.header, 114514);
+            assert_eq!(&read_data.slice, &[1, 1, 4, 5, 1, 4]);
         }
     }
 }
