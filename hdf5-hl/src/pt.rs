@@ -388,6 +388,7 @@ impl PacketTableBuilderTyped {
 #[cfg(test)]
 mod test {
     use crate::*;
+    use hdf5::types::VarLenArray;
     use tempfile::NamedTempFile;
 
     #[test]
@@ -429,6 +430,38 @@ mod test {
                 assert_eq!(table.read_next::<i32>(6).unwrap(), &[1, 1, 4, 5, 1, 4]);
                 assert_eq!(table.index().unwrap(), 6);
             }
+        }
+    }
+
+    #[test]
+    fn varlen() {
+        let file = NamedTempFile::new().unwrap();
+
+        let arr1 = VarLenArray::from_slice(&[1, 1, 4]);
+        let arr2 = VarLenArray::from_slice(&[5, 1]);
+        let arr3 = VarLenArray::from_slice(&[4]);
+        let arr4 = VarLenArray::from_slice(&[1, 9, 1, 9]);
+
+        let data = hdf5::File::create(file.path()).unwrap();
+        {
+            let mut table = PacketTable::builder(&data)
+                .chunk(16)
+                .dtype::<VarLenArray<i32>>()
+                .create("data")
+                .unwrap();
+            table.push(&arr1).unwrap();
+            table.push(&arr2).unwrap();
+            table.push(&arr3).unwrap();
+            table.push(&arr4).unwrap();
+        }
+        {
+            let table = PacketTable::open(&data, "data").unwrap();
+
+            let mut iter = table.iter::<VarLenArray<i32>>();
+            assert_eq!(iter.next().unwrap().unwrap(), arr1);
+            assert_eq!(iter.next().unwrap().unwrap(), arr2);
+            assert_eq!(iter.next().unwrap().unwrap(), arr3);
+            assert_eq!(iter.next().unwrap().unwrap(), arr4);
         }
     }
 }
