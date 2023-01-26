@@ -465,3 +465,63 @@ mod test {
         }
     }
 }
+
+#[cfg(test)]
+mod bench_chunk {
+    use crate::*;
+    use tempfile::NamedTempFile;
+    use test::Bencher;
+
+    fn chunk_buffer<const C: usize, const B: usize>(b: &mut Bencher) {
+        let file = NamedTempFile::new().unwrap();
+        let file = hdf5::File::create(file.path()).unwrap();
+        let mut table = PacketTable::builder(&file)
+            .chunk(C)
+            .dtype::<i32>()
+            .create("data")
+            .unwrap();
+        b.iter(|| {
+            for _i in 0..(65536 / B) {
+                if B == 1 {
+                    table.push(&0).unwrap();
+                } else {
+                    let mut data = vec![];
+                    for j in 0..B {
+                        data.push(j);
+                    }
+                    table.append(&data).unwrap();
+                }
+            }
+        })
+    }
+
+    #[bench]
+    fn append_16_1(b: &mut Bencher) {
+        chunk_buffer::<16, 1>(b)
+    }
+
+    #[bench]
+    fn append_16_16(b: &mut Bencher) {
+        chunk_buffer::<16, 16>(b)
+    }
+
+    #[bench]
+    fn append_16_1024(b: &mut Bencher) {
+        chunk_buffer::<16, 1024>(b)
+    }
+
+    #[bench]
+    fn append_1024_1(b: &mut Bencher) {
+        chunk_buffer::<1024, 1>(b)
+    }
+
+    #[bench]
+    fn append_1024_16(b: &mut Bencher) {
+        chunk_buffer::<1024, 16>(b)
+    }
+
+    #[bench]
+    fn append_1024_1024(b: &mut Bencher) {
+        chunk_buffer::<1024, 1024>(b)
+    }
+}
