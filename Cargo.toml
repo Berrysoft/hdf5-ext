@@ -6,3 +6,7 @@ members = [
     "hdf5-hl-sys",
     "hdf5-hl",
 ]
+
+[profile.release]
+lto = true
+codegen-units = 1

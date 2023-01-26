@@ -1,5 +1,5 @@
 use crate::*;
-use dst_container::{FixedVec, UnsizedClone};
+use dst_container::*;
 use hdf5::Result;
 use std::ptr::Pointee;
 
@@ -55,26 +55,35 @@ impl<'a, T: ?Sized> PacketTableBufWriter<'a, T> {
         self.buffer.push_clone(val);
         self.check_and_flush()
     }
+
+    /// Push the value into the buffer.
+    ///
+    /// # Safety
+    ///
+    /// See [`FixedVec::push_with`].
+    pub unsafe fn push_with(&mut self, f: impl FnOnce(&mut T::Target)) -> Result<()>
+    where
+        T: MaybeUninitProject,
+    {
+        self.buffer.push_with(f);
+        self.check_and_flush()
+    }
 }
 
 impl<'a, T> PacketTableBufWriter<'a, T> {
     /// Create a new [`PacketTableBufWriter`] with buffer length.
     pub fn new(table: &'a mut PacketTable, buf_len: usize) -> Self {
-        Self {
-            table,
-            buffer: FixedVec::with_capacity((), buf_len),
-            buf_len,
-        }
+        Self::new_unsized(table, (), buf_len)
     }
 
     /// Push the value into the buffer.
     pub fn push(&mut self, val: T) -> Result<()> {
+        // SAFETY: we are sure the value is initialized.
         unsafe {
-            self.buffer.push_with(|uninit| {
+            self.push_with(|uninit| {
                 uninit.write(val);
-            });
+            })
         }
-        self.check_and_flush()
     }
 }
 
