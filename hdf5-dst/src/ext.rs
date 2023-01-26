@@ -302,12 +302,7 @@ mod test {
     use std::mem::MaybeUninit;
     use tempfile::NamedTempFile;
 
-    #[derive(MaybeUninitProject, H5TypeUnsized)]
-    #[repr(C)]
-    struct Data {
-        header: u32,
-        slice: [u64],
-    }
+    type Data = UnsizedSlice<u32, u64>;
 
     #[test]
     fn dataset() {

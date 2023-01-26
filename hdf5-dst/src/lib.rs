@@ -7,7 +7,12 @@
 mod ext;
 pub use ext::*;
 
-use hdf5::{types::TypeDescriptor, H5Type};
+use dst_container::{UnsizedSlice, UnsizedStr};
+use hdf5::{
+    types::{CompoundField, CompoundType, TypeDescriptor},
+    H5Type,
+};
+use std::alloc::Layout;
 
 #[doc(hidden)]
 pub mod __internal {
@@ -37,6 +42,66 @@ impl<T: H5Type> H5TypeUnsized for [T] {
 impl H5TypeUnsized for str {
     fn type_descriptor(&self) -> TypeDescriptor {
         TypeDescriptor::FixedUnicode(self.len())
+    }
+}
+
+impl<H: H5Type, T: H5Type> H5TypeUnsized for UnsizedSlice<H, T> {
+    fn type_descriptor(&self) -> TypeDescriptor {
+        let mut fields = vec![];
+        let layout = Layout::new::<()>();
+        let new_layout = Layout::for_value(&self.header);
+        let (layout, offset) = layout.extend(new_layout).unwrap();
+        fields.push(CompoundField::new(
+            "header",
+            H5TypeUnsized::type_descriptor(&self.header),
+            offset,
+            0usize,
+        ));
+        let new_layout = Layout::for_value(&self.slice);
+        let (layout, offset) = layout.extend(new_layout).unwrap();
+        fields.push(CompoundField::new(
+            "slice",
+            H5TypeUnsized::type_descriptor(&self.slice),
+            offset,
+            1usize,
+        ));
+        let layout = layout.pad_to_align();
+        debug_assert_eq!(layout, Layout::for_value(self));
+        let ty = CompoundType {
+            fields,
+            size: layout.size(),
+        };
+        TypeDescriptor::Compound(ty)
+    }
+}
+
+impl<H: H5Type> H5TypeUnsized for UnsizedStr<H> {
+    fn type_descriptor(&self) -> TypeDescriptor {
+        let mut fields = vec![];
+        let layout = Layout::new::<()>();
+        let new_layout = Layout::for_value(&self.header);
+        let (layout, offset) = layout.extend(new_layout).unwrap();
+        fields.push(CompoundField::new(
+            "header",
+            H5TypeUnsized::type_descriptor(&self.header),
+            offset,
+            0usize,
+        ));
+        let new_layout = Layout::for_value(&self.str);
+        let (layout, offset) = layout.extend(new_layout).unwrap();
+        fields.push(CompoundField::new(
+            "str",
+            H5TypeUnsized::type_descriptor(&self.str),
+            offset,
+            1usize,
+        ));
+        let layout = layout.pad_to_align();
+        debug_assert_eq!(layout, Layout::for_value(self));
+        let ty = CompoundType {
+            fields,
+            size: layout.size(),
+        };
+        TypeDescriptor::Compound(ty)
     }
 }
 
