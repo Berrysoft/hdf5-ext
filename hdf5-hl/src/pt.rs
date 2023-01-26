@@ -1,3 +1,6 @@
+mod buf_writer;
+pub use buf_writer::*;
+
 use dst_container::*;
 use hdf5::{
     h5call, h5lock, h5try, plist::DatasetCreate, types::TypeDescriptor, Dataset, Datatype,
@@ -319,15 +322,17 @@ impl PacketTableBuilder {
         self,
         metadata: <T as Pointee>::Metadata,
     ) -> PacketTableBuilderTyped {
-        unsafe {
-            let ptr: *const T = std::ptr::from_raw_parts(std::ptr::null(), metadata);
-            self.dtype_unsized_like(&*ptr)
-        }
+        let ptr: *const T = std::ptr::from_raw_parts(std::ptr::null(), metadata);
+        self.dtype_unsized_like(ptr)
     }
 
     /// Set the [`Datatype`] of the packet table with a sample value reference.
-    pub fn dtype_unsized_like<T: ?Sized + H5TypeUnsized>(self, val: &T) -> PacketTableBuilderTyped {
-        let dtype = val.type_descriptor();
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
+    pub fn dtype_unsized_like<T: ?Sized + H5TypeUnsized>(
+        self,
+        ptr: *const T,
+    ) -> PacketTableBuilderTyped {
+        let dtype = unsafe { (*ptr).type_descriptor() };
         PacketTableBuilderTyped {
             builder: self,
             dtype,
@@ -481,16 +486,9 @@ mod bench_chunk {
             .create("data")
             .unwrap();
         b.iter(|| {
-            for _i in 0..(65536 / B) {
-                if B == 1 {
-                    table.push(&0).unwrap();
-                } else {
-                    let mut data = vec![];
-                    for j in 0..B {
-                        data.push(j);
-                    }
-                    table.append(&data).unwrap();
-                }
+            let mut writer = PacketTableBufWriter::<i32>::new(&mut table, B);
+            for i in 0..65536 {
+                writer.push(i).unwrap();
             }
         })
     }

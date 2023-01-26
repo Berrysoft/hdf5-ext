@@ -145,8 +145,8 @@ pub trait ContainerBuilderExt: Sized {
     ) -> Self::EmptyBuilder;
 
     /// Give a sample reference of DST instance, and create a dataset like it.
-    fn empty_like_unsized<T: ?Sized + H5TypeUnsized>(self, val: &T) -> Self::EmptyBuilder {
-        let (_, metadata) = (val as *const T).to_raw_parts();
+    fn empty_unsized_like<T: ?Sized + H5TypeUnsized>(self, ptr: *const T) -> Self::EmptyBuilder {
+        let (_, metadata) = ptr.to_raw_parts();
         self.empty_unsized::<T>(metadata)
     }
 
