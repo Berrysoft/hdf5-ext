@@ -12,3 +12,4 @@ dst-container = "0.1"
 
 [dev-dependencies]
 tempfile = "3.3"
+generic-tests = "0.1"

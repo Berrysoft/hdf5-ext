@@ -472,11 +472,13 @@ mod test {
 }
 
 #[cfg(test)]
+#[generic_tests::define(attrs(bench))]
 mod bench_chunk {
     use crate::*;
     use tempfile::NamedTempFile;
     use test::Bencher;
 
+    #[bench]
     fn chunk_buffer<const C: usize, const B: usize>(b: &mut Bencher) {
         let file = NamedTempFile::new().unwrap();
         let file = hdf5::File::create(file.path()).unwrap();
@@ -485,41 +487,55 @@ mod bench_chunk {
             .dtype::<i32>()
             .create("data")
             .unwrap();
-        b.iter(|| {
-            let mut writer = PacketTableBufWriter::<i32>::new(&mut table, B);
-            for i in 0..65536 {
-                writer.push(i).unwrap();
-            }
-        })
+        if B == 1 {
+            b.iter(|| {
+                for i in 0..65536 {
+                    table.push(&i).unwrap();
+                }
+            })
+        } else {
+            b.iter(|| {
+                let mut writer = PacketTableBufWriter::<i32>::new(&mut table, B);
+                for i in 0..65536 {
+                    writer.push(i).unwrap();
+                }
+            })
+        }
     }
 
-    #[bench]
-    fn append_16_1(b: &mut Bencher) {
-        chunk_buffer::<16, 1>(b)
-    }
+    #[instantiate_tests(<16, 1>)]
+    mod append_16_1 {}
 
-    #[bench]
-    fn append_16_16(b: &mut Bencher) {
-        chunk_buffer::<16, 16>(b)
-    }
+    #[instantiate_tests(<16, 16>)]
+    mod append_16_16 {}
 
-    #[bench]
-    fn append_16_1024(b: &mut Bencher) {
-        chunk_buffer::<16, 1024>(b)
-    }
+    #[instantiate_tests(<16, 1024>)]
+    mod append_16_1024 {}
 
-    #[bench]
-    fn append_1024_1(b: &mut Bencher) {
-        chunk_buffer::<1024, 1>(b)
-    }
+    #[instantiate_tests(<16, 65536>)]
+    mod append_16_65536 {}
 
-    #[bench]
-    fn append_1024_16(b: &mut Bencher) {
-        chunk_buffer::<1024, 16>(b)
-    }
+    #[instantiate_tests(<1024, 1>)]
+    mod append_1024_1 {}
 
-    #[bench]
-    fn append_1024_1024(b: &mut Bencher) {
-        chunk_buffer::<1024, 1024>(b)
-    }
+    #[instantiate_tests(<1024, 16>)]
+    mod append_1024_16 {}
+
+    #[instantiate_tests(<1024, 1024>)]
+    mod append_1024_1024 {}
+
+    #[instantiate_tests(<1024, 65536>)]
+    mod append_1024_65536 {}
+
+    #[instantiate_tests(<65536, 1>)]
+    mod append_65536_1 {}
+
+    #[instantiate_tests(<65536, 16>)]
+    mod append_65536_16 {}
+
+    #[instantiate_tests(<65536, 1024>)]
+    mod append_65536_1024 {}
+
+    #[instantiate_tests(<65536, 65536>)]
+    mod append_65536_65536 {}
 }
