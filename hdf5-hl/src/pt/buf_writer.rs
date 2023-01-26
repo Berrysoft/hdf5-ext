@@ -34,9 +34,12 @@ impl<'a, T: ?Sized> PacketTableBufWriter<'a, T> {
         }
     }
 
-    fn flush(&mut self) -> Result<()> {
-        self.table.append_unsized(&self.buffer)?;
-        self.buffer.clear();
+    /// Force flush the buffer.
+    pub fn flush(&mut self) -> Result<()> {
+        if !self.buffer.is_empty() {
+            self.table.append_unsized(&self.buffer)?;
+            self.buffer.clear();
+        }
         Ok(())
     }
 
@@ -89,8 +92,6 @@ impl<'a, T> PacketTableBufWriter<'a, T> {
 
 impl<'a, T: ?Sized> Drop for PacketTableBufWriter<'a, T> {
     fn drop(&mut self) {
-        if !self.buffer.is_empty() {
-            self.flush().unwrap();
-        }
+        self.flush().unwrap();
     }
 }
