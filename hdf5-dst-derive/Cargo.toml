@@ -1,6 +1,7 @@
 [package]
 name = "hdf5-dst-derive"
 version = "0.1.0"
+description = "Derive macro of hdf5-dst"
 edition.workspace = true
 authors.workspace = true
 categories.workspace = true
