@@ -1,7 +1,13 @@
 [package]
 name = "hdf5-hl-sys"
 version = "0.1.0"
-edition = "2021"
+description = "Bindings to HDF5 High Level API"
+edition.workspace = true
+authors.workspace = true
+categories.workspace = true
+keywords.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 hdf5-sys = { workspace = true }

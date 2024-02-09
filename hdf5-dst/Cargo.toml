@@ -1,7 +1,13 @@
 [package]
 name = "hdf5-dst"
 version = "0.1.0"
-edition = "2021"
+description = "DST extensions for HDF5"
+edition.workspace = true
+authors.workspace = true
+categories.workspace = true
+keywords.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 hdf5-dst-derive = { workspace = true }
