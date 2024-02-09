@@ -4,10 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-hdf5-dst-derive = { path = "../hdf5-dst-derive" }
-hdf5 = "0.8"
-hdf5-sys = "0.8"
-dst-container = "0.1"
+hdf5-dst-derive = { workspace = true }
+hdf5 = { workspace = true }
+hdf5-sys = { workspace = true }
+dst-container = { workspace = true }
 
 [dev-dependencies]
-tempfile = "3.3"
+tempfile = { workspace = true }

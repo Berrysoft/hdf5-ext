@@ -1,12 +1,19 @@
 [workspace]
-members = [
-    "hdf5-dst-derive",
-    "hdf5-dst",
+members = ["hdf5-dst-derive", "hdf5-dst", "hdf5-hl-sys", "hdf5-hl"]
 
-    "hdf5-hl-sys",
-    "hdf5-hl",
-]
+resolver = "2"
 
 [profile.release]
 lto = true
 codegen-units = 1
+
+[workspace.dependencies]
+hdf5 = "0.8"
+hdf5-sys = "0.8"
+
+hdf5-hl-sys = { path = "hdf5-hl-sys" }
+hdf5-dst-derive = { path = "hdf5-dst-derive" }
+hdf5-dst = { path = "hdf5-dst" }
+
+dst-container = "0.1"
+tempfile = "3"

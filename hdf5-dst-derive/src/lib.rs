@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use proc_macro_crate::{crate_name, FoundCrate};
-use quote::quote;
+use quote::{quote, ToTokens};
 use syn::{parse_str, Attribute, Data, DeriveInput, Field, Fields, GenericParam, Generics, Ident};
 
 struct PreDerive {
@@ -70,11 +70,18 @@ pub fn derive_h5type_unsized(input: TokenStream) -> TokenStream {
 
     let repr = attrs
         .iter()
-        .find(|attr| attr.path.get_ident().map_or(false, |ident| ident == "repr"))
+        .find(|attr| {
+            attr.path()
+                .get_ident()
+                .map_or(false, |ident| ident == "repr")
+        })
         .expect("Need #[repr(...)].");
-    let repr_content = repr.tokens.to_string();
-    if !matches!(repr_content.as_str(), "(C)" | "(transparent)") {
-        panic!("Expected #[repr(C)], #[repr(transparent)] only.");
+    let repr_content = repr.to_token_stream().to_string();
+    if !matches!(repr_content.as_str(), "#[repr(C)]" | "#[repr(transparent)]") {
+        panic!(
+            "Expected #[repr(C)], #[repr(transparent)] only, received: {}.",
+            repr_content
+        );
     }
 
     let calculate_type = match data {
