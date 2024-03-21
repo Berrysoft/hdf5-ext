@@ -313,7 +313,7 @@ mod test {
         unsafe {
             vec.push_with(|slice| {
                 slice.header.write(114514);
-                MaybeUninit::write_slice(&mut slice.slice, &[1, 1, 4, 5, 1, 4]);
+                MaybeUninit::copy_from_slice(&mut slice.slice, &[1, 1, 4, 5, 1, 4]);
             })
         };
 
@@ -343,7 +343,7 @@ mod test {
         let unsized_data: Box<Data> = unsafe {
             Box::<Data>::new_unsized_with(6, |slice| {
                 slice.header.write(114514);
-                MaybeUninit::write_slice(&mut slice.slice, &[1, 1, 4, 5, 1, 4]);
+                MaybeUninit::copy_from_slice(&mut slice.slice, &[1, 1, 4, 5, 1, 4]);
             })
         };
 

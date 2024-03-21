@@ -1,6 +1,6 @@
 [package]
 name = "hdf5-dst"
-version = "0.1.0"
+version = "0.1.1"
 description = "DST extensions for HDF5"
 edition.workspace = true
 authors.workspace = true
