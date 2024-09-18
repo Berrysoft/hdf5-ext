@@ -3,8 +3,8 @@ pub use buf_writer::*;
 
 use dst_container::*;
 use hdf5::{
-    h5call, h5lock, h5try, plist::DatasetCreate, types::TypeDescriptor, Dataset, Datatype,
-    Dimension, Group, H5Type, Result,
+    from_id, h5call, h5lock, h5try, plist::DatasetCreate, types::TypeDescriptor, Dataset, Datatype,
+    Dimension, Error, Group, H5Type, Result,
 };
 use hdf5_dst::H5TypeUnsized;
 use hdf5_hl_sys::h5pt::{
@@ -20,12 +20,7 @@ use hdf5_sys::{
     },
     h5p::H5P_DEFAULT,
 };
-use std::{
-    ffi::CString,
-    fmt::Debug,
-    mem::{transmute, MaybeUninit},
-    ptr::Pointee,
-};
+use std::{ffi::CString, fmt::Debug, mem::MaybeUninit, ptr::Pointee};
 
 /// The packet type of a packet table.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -114,7 +109,7 @@ impl PacketTable {
     pub fn dataset(&self) -> Result<Dataset> {
         let dset = h5try!(H5PTget_dataset(self.id()));
         h5lock!(H5Iinc_ref(dset));
-        Ok(unsafe { transmute(dset) })
+        unsafe { from_id(dset) }
     }
 
     /// Determine if the current packet table is valid.
@@ -126,14 +121,18 @@ impl PacketTable {
     /// Determines whether a packet table contains variable-length or fixed-length packets.
     pub fn table_type(&self) -> Result<PacketTableType> {
         let ty = h5try!(H5PTis_varlen(self.id()));
-        Ok(unsafe { transmute(ty) })
+        match ty {
+            0 => Ok(PacketTableType::Fixed),
+            1 => Ok(PacketTableType::VarLen),
+            _ => Err(Error::Internal("Invalid packet table type.".to_string())),
+        }
     }
 
     /// Get the inner [`Datatype`] from the packet table.
     pub fn dtype(&self) -> Result<Datatype> {
         let ty = h5try!(H5PTget_type(self.id()));
         h5lock!(H5Iinc_ref(ty));
-        Ok(unsafe { transmute(ty) })
+        unsafe { from_id(ty) }
     }
 
     /// Get the number of packets.
@@ -393,7 +392,7 @@ impl PacketTableBuilderTyped {
 #[cfg(test)]
 mod test {
     use crate::*;
-    use hdf5::types::VarLenArray;
+    use hdf5::{types::VarLenArray, H5Type};
     use tempfile::NamedTempFile;
 
     #[test]
@@ -409,6 +408,10 @@ mod test {
                 .dtype::<i32>()
                 .create("data")
                 .unwrap();
+            assert_eq!(
+                table.dtype().unwrap().to_descriptor().unwrap(),
+                i32::type_descriptor()
+            );
             table.append(&vec).unwrap();
         }
         {
