@@ -160,7 +160,7 @@ pub trait ContainerBuilderExt: Sized {
 fn type_from_null<T: ?Sized + H5TypeUnsized>(metadata: <T as Pointee>::Metadata) -> TypeDescriptor {
     // SAFETY: is it safe?
     unsafe {
-        let ptr: *const T = std::ptr::from_raw_parts(std::ptr::null(), metadata);
+        let ptr: *const T = std::ptr::from_raw_parts(std::ptr::null::<()>(), metadata);
         (*ptr).type_descriptor()
     }
 }

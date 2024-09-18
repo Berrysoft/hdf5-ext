@@ -322,7 +322,7 @@ impl PacketTableBuilder {
         self,
         metadata: <T as Pointee>::Metadata,
     ) -> PacketTableBuilderTyped {
-        let ptr: *const T = std::ptr::from_raw_parts(std::ptr::null(), metadata);
+        let ptr: *const T = std::ptr::from_raw_parts(std::ptr::null::<()>(), metadata);
         self.dtype_unsized_like(ptr)
     }
 
