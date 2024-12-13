@@ -68,7 +68,7 @@ impl<'a, T: ?Sized> PacketTableBufWriter<'a, T> {
     where
         T: MaybeUninitProject,
     {
-        self.buffer.push_with(f);
+        unsafe { self.buffer.push_with(f) };
         self.check_and_flush()
     }
 }

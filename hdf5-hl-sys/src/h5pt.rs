@@ -4,7 +4,7 @@ use hdf5_sys::{
     h5i::hid_t,
 };
 
-extern "C" {
+unsafe extern "C" {
     pub fn H5PTcreate(
         loc_id: hid_t,
         ptable_name: *const c_char,

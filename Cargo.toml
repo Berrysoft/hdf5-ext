@@ -1,10 +1,10 @@
 [workspace]
 members = ["hdf5-dst-derive", "hdf5-dst", "hdf5-hl-sys", "hdf5-hl"]
 
-resolver = "2"
+resolver = "3"
 
 [workspace.package]
-edition = "2021"
+edition = "2024"
 authors = ["Yuyi Wang <Strawberry_Str@hotmail.com>"]
 categories = ["data-structures"]
 keywords = ["hdf5"]
