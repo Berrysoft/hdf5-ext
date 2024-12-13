@@ -1,10 +1,10 @@
 use proc_macro::TokenStream;
-use proc_macro_crate::{crate_name, FoundCrate};
+use proc_macro_crate::{FoundCrate, crate_name};
 use proc_macro_error2::abort;
 use quote::quote;
 use syn::{
-    parse_str, AttrStyle, Attribute, Data, DeriveInput, Field, Fields, GenericParam, Generics,
-    Ident,
+    AttrStyle, Attribute, Data, DeriveInput, Field, Fields, GenericParam, Generics, Ident,
+    parse_str,
 };
 
 struct PreDerive {
