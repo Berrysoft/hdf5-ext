@@ -90,7 +90,7 @@ impl<'a, T> PacketTableBufWriter<'a, T> {
     }
 }
 
-impl<'a, T: ?Sized> Drop for PacketTableBufWriter<'a, T> {
+impl<T: ?Sized> Drop for PacketTableBufWriter<'_, T> {
     fn drop(&mut self) {
         self.flush().unwrap();
     }

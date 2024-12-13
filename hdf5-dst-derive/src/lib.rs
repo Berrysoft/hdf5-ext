@@ -1,7 +1,11 @@
 use proc_macro::TokenStream;
 use proc_macro_crate::{crate_name, FoundCrate};
-use quote::{quote, ToTokens};
-use syn::{parse_str, Attribute, Data, DeriveInput, Field, Fields, GenericParam, Generics, Ident};
+use proc_macro_error2::abort;
+use quote::quote;
+use syn::{
+    parse_str, AttrStyle, Attribute, Data, DeriveInput, Field, Fields, GenericParam, Generics,
+    Ident,
+};
 
 struct PreDerive {
     attrs: Vec<Attribute>,
@@ -57,6 +61,30 @@ fn pre_derive(input: TokenStream) -> PreDerive {
     }
 }
 
+fn find_repr(attrs: &[Attribute], expected: &[&str]) -> Option<Ident> {
+    let mut repr = None;
+    for attr in attrs.iter() {
+        if attr.style != AttrStyle::Outer {
+            continue;
+        }
+        if !attr.path().is_ident("repr") {
+            continue;
+        }
+        attr.parse_nested_meta(|meta| {
+            if expected.iter().any(|s| meta.path.is_ident(s)) {
+                if repr.is_some() {
+                    abort!(meta.path, "ambiguous repr attribute");
+                } else {
+                    repr = meta.path.get_ident().cloned();
+                }
+            }
+            Ok(())
+        })
+        .ok()?;
+    }
+    repr
+}
+
 #[proc_macro_derive(H5TypeUnsized)]
 pub fn derive_h5type_unsized(input: TokenStream) -> TokenStream {
     let PreDerive {
@@ -68,21 +96,7 @@ pub fn derive_h5type_unsized(input: TokenStream) -> TokenStream {
         dst_crate_name,
     } = pre_derive(input);
 
-    let repr = attrs
-        .iter()
-        .find(|attr| {
-            attr.path()
-                .get_ident()
-                .map_or(false, |ident| ident == "repr")
-        })
-        .expect("Need #[repr(...)].");
-    let repr_content = repr.to_token_stream().to_string();
-    if !matches!(repr_content.as_str(), "#[repr(C)]" | "#[repr(transparent)]") {
-        panic!(
-            "Expected #[repr(C)], #[repr(transparent)] only, received: {}.",
-            repr_content
-        );
-    }
+    find_repr(&attrs, &["C", "transparent"]).expect("expect repr(C) or repr(transparent)");
 
     let calculate_type = match data {
         Data::Struct(data) => match data.fields {

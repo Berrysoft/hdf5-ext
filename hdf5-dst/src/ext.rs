@@ -210,7 +210,7 @@ pub struct DatasetBuilderDataUnsized<'a, T: ?Sized> {
     builder: DatasetBuilderEmpty,
 }
 
-impl<'a, T: ?Sized + H5TypeUnsized> DatasetBuilderDataUnsized<'a, T> {
+impl<T: ?Sized + H5TypeUnsized> DatasetBuilderDataUnsized<'_, T> {
     /// Create the [`Dataset`] and fill the value.
     pub fn create<'n>(self, name: impl Into<Option<&'n str>>) -> Result<Dataset> {
         let dataset = self.builder.shape(self.data.shape()).create(name.into())?;
@@ -254,7 +254,7 @@ pub struct AttributeBuilderDataUnsized<'a, T: ?Sized> {
     builder: AttributeBuilderEmpty,
 }
 
-impl<'a, T: ?Sized + H5TypeUnsized> AttributeBuilderDataUnsized<'a, T> {
+impl<T: ?Sized + H5TypeUnsized> AttributeBuilderDataUnsized<'_, T> {
     /// Create the [`Attribute`] and fill the value.
     pub fn create(self, name: impl AsRef<str>) -> Result<Attribute> {
         let attr = self

@@ -1,6 +1,6 @@
 [package]
 name = "hdf5-hl"
-version = "0.2.0"
+version = "0.2.1"
 description = "High level bindings to HDF5 High Level API"
 edition.workspace = true
 authors.workspace = true

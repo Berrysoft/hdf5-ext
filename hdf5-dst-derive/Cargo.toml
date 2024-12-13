@@ -1,6 +1,6 @@
 [package]
 name = "hdf5-dst-derive"
-version = "0.1.0"
+version = "0.1.1"
 description = "Derive macro of hdf5-dst"
 edition.workspace = true
 authors.workspace = true
@@ -17,3 +17,4 @@ syn = { version = "2", features = ["full"] }
 quote = "1"
 proc-macro2 = "1"
 proc-macro-crate = "3"
+proc-macro-error2 = "2"

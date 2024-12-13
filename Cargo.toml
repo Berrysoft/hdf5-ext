@@ -17,7 +17,7 @@ codegen-units = 1
 
 [workspace.dependencies]
 hdf5 = { package = "hdf5-metno", version = "0.9" }
-hdf5-sys = { package = "hdf5-metno-sys", version = "0.9" }
+hdf5-sys = { package = "hdf5-metno-sys", version = "0.10" }
 
 hdf5-hl-sys = { path = "hdf5-hl-sys", version = "0.2.0" }
 hdf5-dst-derive = { path = "hdf5-dst-derive", version = "0.1.0" }
