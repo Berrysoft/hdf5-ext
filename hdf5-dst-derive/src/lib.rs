@@ -1,10 +1,9 @@
 use proc_macro::TokenStream;
 use proc_macro_crate::{FoundCrate, crate_name};
-use proc_macro_error2::abort;
 use quote::quote;
 use syn::{
-    AttrStyle, Attribute, Data, DeriveInput, Field, Fields, GenericParam, Generics, Ident,
-    parse_str,
+    AttrStyle, Attribute, Data, DeriveInput, Error, Field, Fields, GenericParam, Generics, Ident,
+    parse_str, spanned::Spanned,
 };
 
 struct PreDerive {
@@ -61,7 +60,7 @@ fn pre_derive(input: TokenStream) -> PreDerive {
     }
 }
 
-fn find_repr(attrs: &[Attribute], expected: &[&str]) -> Option<Ident> {
+fn find_repr(attrs: &[Attribute], expected: &[&str]) -> syn::Result<Option<Ident>> {
     let mut repr = None;
     for attr in attrs.iter() {
         if attr.style != AttrStyle::Outer {
@@ -73,16 +72,15 @@ fn find_repr(attrs: &[Attribute], expected: &[&str]) -> Option<Ident> {
         attr.parse_nested_meta(|meta| {
             if expected.iter().any(|s| meta.path.is_ident(s)) {
                 if repr.is_some() {
-                    abort!(meta.path, "ambiguous repr attribute");
+                    return Err(Error::new(meta.path.span(), "ambiguous repr attribute"));
                 } else {
                     repr = meta.path.get_ident().cloned();
                 }
             }
             Ok(())
-        })
-        .ok()?;
+        })?;
     }
-    repr
+    Ok(repr)
 }
 
 #[proc_macro_derive(H5TypeUnsized)]
@@ -96,7 +94,10 @@ pub fn derive_h5type_unsized(input: TokenStream) -> TokenStream {
         dst_crate_name,
     } = pre_derive(input);
 
-    find_repr(&attrs, &["C", "transparent"]).expect("expect repr(C) or repr(transparent)");
+    match find_repr(&attrs, &["C", "transparent"]) {
+        Ok(res) => res.expect("expect repr(C) or repr(transparent)"),
+        Err(e) => return e.to_compile_error().into(),
+    };
 
     let calculate_type = match data {
         Data::Struct(data) => match data.fields {
