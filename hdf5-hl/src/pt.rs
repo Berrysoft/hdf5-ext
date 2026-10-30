@@ -3,8 +3,8 @@ pub use buf_writer::*;
 
 use dst_container::*;
 use hdf5::{
-    from_id, h5call, h5lock, h5try, plist::DatasetCreate, types::TypeDescriptor, Dataset, Datatype,
-    Dimension, Error, Group, H5Type, Result,
+    Dataset, Datatype, Dimension, Error, Group, H5Type, Result, from_id, h5call, h5lock, h5try,
+    plist::DatasetCreate, types::TypeDescriptor,
 };
 use hdf5_dst::H5TypeUnsized;
 use hdf5_hl_sys::h5pt::{
@@ -14,9 +14,8 @@ use hdf5_hl_sys::h5pt::{
 };
 use hdf5_sys::{
     h5i::{
-        hid_t,
         H5I_type_t::{self, H5I_BADID, H5I_NTYPES},
-        H5Iget_type, H5Iinc_ref,
+        H5Iget_type, H5Iinc_ref, hid_t,
     },
     h5p::H5P_DEFAULT,
 };
@@ -392,7 +391,7 @@ impl PacketTableBuilderTyped {
 #[cfg(test)]
 mod test {
     use crate::*;
-    use hdf5::{types::VarLenArray, H5Type};
+    use hdf5::{H5Type, types::VarLenArray};
     use tempfile::NamedTempFile;
 
     #[test]

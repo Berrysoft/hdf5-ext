@@ -1,7 +1,6 @@
 //! DST extension APIs for [`hdf5`].
 
 #![feature(ptr_metadata)]
-#![cfg_attr(test, feature(maybe_uninit_write_slice))]
 #![warn(missing_docs)]
 
 mod ext;
@@ -9,8 +8,8 @@ pub use ext::*;
 
 use dst_container::{UnsizedSlice, UnsizedStr};
 use hdf5::{
-    types::{CompoundField, CompoundType, TypeDescriptor},
     H5Type,
+    types::{CompoundField, CompoundType, TypeDescriptor},
 };
 use std::alloc::Layout;
 

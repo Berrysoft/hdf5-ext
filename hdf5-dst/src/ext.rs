@@ -3,8 +3,8 @@ use std::ptr::Pointee;
 use crate::H5TypeUnsized;
 use dst_container::*;
 use hdf5::{
-    h5try, types::TypeDescriptor, Attribute, AttributeBuilder, AttributeBuilderEmpty, Container,
-    Dataset, DatasetBuilder, DatasetBuilderEmpty, Datatype, Extents, Object, Result,
+    Attribute, AttributeBuilder, AttributeBuilderEmpty, Container, Dataset, DatasetBuilder,
+    DatasetBuilderEmpty, Datatype, Extents, Object, Result, h5try, types::TypeDescriptor,
 };
 use hdf5_sys::{
     h5a::{H5Aread, H5Awrite},
@@ -299,7 +299,6 @@ impl ContainerBuilderExt for AttributeBuilder {
 mod test {
     use crate::*;
     use dst_container::*;
-    use std::mem::MaybeUninit;
     use tempfile::NamedTempFile;
 
     type Data = UnsizedSlice<u32, u64>;
@@ -313,7 +312,7 @@ mod test {
         unsafe {
             vec.push_with(|slice| {
                 slice.header.write(114514);
-                MaybeUninit::copy_from_slice(&mut slice.slice, &[1, 1, 4, 5, 1, 4]);
+                slice.slice.write_copy_of_slice(&[1, 1, 4, 5, 1, 4]);
             })
         };
 
@@ -343,7 +342,7 @@ mod test {
         let unsized_data: Box<Data> = unsafe {
             Box::<Data>::new_unsized_with(6, |slice| {
                 slice.header.write(114514);
-                MaybeUninit::copy_from_slice(&mut slice.slice, &[1, 1, 4, 5, 1, 4]);
+                slice.slice.write_copy_of_slice(&[1, 1, 4, 5, 1, 4]);
             })
         };
 
